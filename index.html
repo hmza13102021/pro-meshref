@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queue Performance Calculator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            margin-top: 30px;
+        }
+        .results {
+            margin-top: 20px;
+        }
+        .header-table th {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center text-primary">Queue Performance Calculator</h1>
+        <form id="queueForm" class="row g-3">
+            <div class="col-md-6">
+                <label for="arrivalRate" class="form-label">Arrival Rate (\( \lambda \)):</label>
+                <input type="number" id="arrivalRate" class="form-control" step="0.1" placeholder="Enter arrival rate" required>
+            </div>
+            <div class="col-md-6">
+                <label for="serviceRate" class="form-label">Service Rate (\( \mu \)):</label>
+                <input type="number" id="serviceRate" class="form-control" step="0.1" placeholder="Enter service rate" required>
+            </div>
+            <div class="col-md-12">
+                <button type="submit" class="btn btn-primary w-100">Calculate</button>
+            </div>
+        </form>
+
+        <div class="results">
+            <h2 class="text-center text-success">Results</h2>
+            <table class="table table-bordered">
+                <thead class="table-light header-table">
+                    <tr>
+                        <th colspan="2">Question</th>
+                    </tr>
+                    <tr>
+                        
+                        <th>Value</th>
+                        <th>Answer</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTable">
+                    <!-- Results will be dynamically inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('queueForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            // Get input values
+            const lambda = parseFloat(document.getElementById('arrivalRate').value);
+            const mu = parseFloat(document.getElementById('serviceRate').value);
+
+            // Validate inputs
+            if (lambda <= 0 || mu <= lambda) {
+                alert('Invalid input: Ensure that \( \lambda > 0 \) and \( \mu > \lambda \).');
+                return;
+            }
+
+            // Calculations
+            const p = lambda / mu; // Traffic intensity
+           // Probability of 0 customers in the system
+           const P0 = (1 - p).toFixed(4); 
+           const Pn = (n) => (Math.pow(lambda / mu, n) * (1 - p)).toFixed(4); // Probability of n customers in the system
+
+            const L = (p / (1 - p)).toFixed(4); // Expected number of customers in the system
+            const Lq = (Math.pow(lambda, 2) / (mu * (mu - lambda))).toFixed(4); // Expected number of customers in the queue
+           
+            const W = (1 / (mu - lambda)).toFixed(4); // Expected time in the system
+            const Wq = (lambda / (mu * (mu - lambda))).toFixed(4); // Expected time in the queue
+           
+            const Pw_gt_t = (t) => (Math.exp(-mu * (1 - p) * t)).toFixed(4); // Probability of waiting more than t time
+            const Pw_gt_t_given_W_gt_0 = (t) => (Pw_gt_t(t) / p).toFixed(4); // Conditional probability of waiting more than t given W > 0
+            const Pw_gt_t_given_W_gt_main_time = (t) => (Pw_gt_t(t) / (1 - p)).toFixed(4); // Conditional probability of waiting more than t given W > MAIN TIME
+
+            // Metrics object
+            const metrics = {
+                'Arrival Rate (\( \lambda \))': lambda.toFixed(4),
+                'Service Rate (\( \mu \))': mu.toFixed(4),
+                // Arrival rate (or time)
+                'Arrival rate (or time)': (1 / lambda).toFixed(4),
+                // Service rate (or time)
+                'Service rate (or time)': (1 / mu).toFixed(4),
+
+                'Traffic Intensity (\( p \))': p.toFixed(4),
+                'Probability of 0 customers (\( P_0 \))': P0,
+                
+                'Probability of 0 customers (\( p(n>6) \))': calculateProbabilityMoreThanN(lambda, mu, 6).toFixed(4),
+
+                'Expected number of customers in system (\( E(L) \))': L,
+                " (\( E(s) \))": calculateExpectedSystemTime(lambda, mu).toFixed(4),
+                'Expected number of customers in queue (\( E(L_q) \))': Lq,
+                
+                'Expected time in queue (\( E(W) \))': Wq,
+                'P(W > 0)': p.toFixed(4),
+                'P(W > 0.5 mean time)': calculateProbability0F(lambda, mu).toFixed(4),
+                'P(W > 1.5 mean time)': calculateProbability1F(lambda, mu).toFixed(4),
+                'P(W > t)': Pw_gt_t(1),
+                'P(W > t | W > 0)': Pw_gt_t_given_W_gt_0(1),
+                'P(W > t | W > main time)': Pw_gt_t_given_W_gt_main_time(1),
+                
+               
+               
+                
+            };
+
+            // Adding probabilities for n = 1 to 6
+            for (let n = 1; n <= 6; n++) {
+                metrics[`Probability of ${n} customers (\( P_${n} \))`] = Pn(n);
+            }
+
+            // Display results
+            const resultsTable = document.getElementById('resultsTable');
+            resultsTable.innerHTML = '';
+
+            for (const [key, value] of Object.entries(metrics)) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${key}</td><td>${value}</td>`;
+                resultsTable.appendChild(row);
+            }
+            function calculateExpectedSystemTime(arrivalRate, serviceRate) {
+                    const trafficIntensity = arrivalRate / serviceRate;
+                    const expectedNumberOfCustomers = trafficIntensity / (1 - trafficIntensity);
+                    const expectedSystemTime = expectedNumberOfCustomers / arrivalRate;
+                    return expectedSystemTime;
+                    }
+            function calculateProbabilityMoreThanN(arrivalRate, serviceRate, n) {
+                const trafficIntensity = arrivalRate / serviceRate;
+                let probability = 0;
+
+                for (let i = n + 1; i <= 100; i++) { // يمكنك زيادة 100 إلى قيمة أكبر إذا لزم الأمر
+                    probability += (1 - trafficIntensity) * Math.pow(trafficIntensity, i);
+                }
+
+                return probability;
+                }
+            function calculateProbability0F(arrivalRate, serviceRate) {
+                    // حساب كثافة الحركة (rho)
+                    const rho = arrivalRate / serviceRate;
+
+                    // حساب متوسط وقت الانتظار (E[W])
+                    const E_W = rho / (serviceRate * (1 - rho));
+
+                    // حساب احتمال أن يكون وقت الانتظار أكبر من 1.5 ضعف متوسط وقت الانتظار
+                    const probability = Math.exp(-0.5 * E_W / E_W);
+
+                    return probability;
+                }
+            function calculateProbability1F(arrivalRate, serviceRate) {
+                    // حساب كثافة الحركة (rho)
+                    const rho = arrivalRate / serviceRate;
+
+                    // حساب متوسط وقت الانتظار (E[W])
+                    const E_W = rho / (serviceRate * (1 - rho));
+
+                    // حساب احتمال أن يكون وقت الانتظار أكبر من 1.5 ضعف متوسط وقت الانتظار
+                    const probability = Math.exp(-1.5 * E_W / E_W);
+
+                    return probability;
+                }
+                    });
+    
+
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
